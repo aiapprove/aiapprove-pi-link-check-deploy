@@ -1,0 +1,317 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.24.0",
+      "templateHash": "pilinkcheck-intenant-v1"
+    },
+    "description": "PI Link Check Agent - In-Tenant Deployment. Deploys Azure Functions, Key Vault, Storage, and Application Insights for hosting the PI link validation backend in your own Azure subscription."
+  },
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "prod",
+      "allowedValues": ["dev", "staging", "prod"],
+      "metadata": {
+        "description": "Environment name (dev, staging, prod)"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "ukwest",
+      "allowedValues": ["uksouth", "ukwest", "northeurope", "westeurope", "eastus", "westus2"],
+      "metadata": {
+        "description": "Azure region for all resources. Note: UK South may have consumption plan quota limits."
+      }
+    },
+    "baseName": {
+      "type": "string",
+      "defaultValue": "pilinkcheck",
+      "minLength": 3,
+      "maxLength": 20,
+      "metadata": {
+        "description": "Base name for resources (e.g., pilinkcheck, picheck-contoso)"
+      }
+    },
+    "sharePointSiteUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "SharePoint site URL to connect to (e.g., https://contoso.sharepoint.com/sites/PICheck)"
+      }
+    },
+    "sharePointSiteId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SharePoint site ID from Graph API. Can be configured post-deployment."
+      }
+    },
+    "entraAppClientId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Entra ID App Registration Client ID. Configure post-deployment if not known."
+      }
+    },
+    "adminPrincipalIds": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Object IDs of users who should have Key Vault secrets access"
+      }
+    }
+  },
+  "variables": {
+    "resourceTags": {
+      "application": "pi-link-check",
+      "managedBy": "arm-template",
+      "environment": "[parameters('environment')]"
+    },
+    "uniqueSuffix": "[uniqueString(resourceGroup().id, parameters('baseName'))]",
+    "functionAppName": "[format('{0}-func-{1}-{2}', parameters('baseName'), parameters('environment'), variables('uniqueSuffix'))]",
+    "storageAccountName": "[toLower(replace(format('{0}st{1}{2}', parameters('baseName'), parameters('environment'), take(variables('uniqueSuffix'), 8)), '-', ''))]",
+    "keyVaultName": "[format('{0}-kv-{1}-{2}', parameters('baseName'), parameters('environment'), take(variables('uniqueSuffix'), 8))]",
+    "appInsightsName": "[format('{0}-ai-{1}', parameters('baseName'), parameters('environment'))]",
+    "logAnalyticsName": "[format('{0}-la-{1}', parameters('baseName'), parameters('environment'))]",
+    "appServicePlanName": "[format('{0}-asp-{1}', parameters('baseName'), parameters('environment'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('logAnalyticsName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('resourceTags')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('appInsightsName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('resourceTags')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]",
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('resourceTags')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "supportsHttpsTrafficOnly": true,
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false,
+        "networkAcls": {
+          "defaultAction": "Allow",
+          "bypass": "AzureServices"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('resourceTags')]",
+      "properties": {
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "tenantId": "[subscription().tenantId]",
+        "enableRbacAuthorization": true,
+        "enableSoftDelete": true,
+        "softDeleteRetentionInDays": 90,
+        "enablePurgeProtection": true,
+        "networkAcls": {
+          "defaultAction": "Allow",
+          "bypass": "AzureServices"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('appServicePlanName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('resourceTags')]",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic"
+      },
+      "properties": {
+        "reserved": false
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('functionAppName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('resourceTags')]",
+      "kind": "functionapp",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "httpsOnly": true,
+        "siteConfig": {
+          "ftpsState": "Disabled",
+          "minTlsVersion": "1.2",
+          "cors": {
+            "allowedOrigins": [
+              "https://teams.microsoft.com",
+              "https://*.teams.microsoft.com",
+              "https://localhost:3000"
+            ],
+            "supportCredentials": true
+          },
+          "appSettings": [
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "node"
+            },
+            {
+              "name": "WEBSITE_NODE_DEFAULT_VERSION",
+              "value": "~20"
+            },
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "[toLower(variables('functionAppName'))]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').ConnectionString]"
+            },
+            {
+              "name": "SHAREPOINT_SITE_URL",
+              "value": "[parameters('sharePointSiteUrl')]"
+            },
+            {
+              "name": "SHAREPOINT_SITE_ID",
+              "value": "[parameters('sharePointSiteId')]"
+            },
+            {
+              "name": "ENTRA_APP_CLIENT_ID",
+              "value": "[parameters('entraAppClientId')]"
+            },
+            {
+              "name": "KEY_VAULT_NAME",
+              "value": "[variables('keyVaultName')]"
+            },
+            {
+              "name": "EDITION",
+              "value": "lite"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.KeyVault/vaults/{0}', variables('keyVaultName'))]",
+      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), resourceId('Microsoft.Web/sites', variables('functionAppName')), 'Key Vault Secrets User')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-01-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "functionAppUrl": {
+      "type": "string",
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-01-01').defaultHostName)]",
+      "metadata": {
+        "description": "Function App URL - use this as your BackendUrl"
+      }
+    },
+    "functionAppName": {
+      "type": "string",
+      "value": "[variables('functionAppName')]",
+      "metadata": {
+        "description": "Function App name"
+      }
+    },
+    "functionAppPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-01-01', 'full').identity.principalId]",
+      "metadata": {
+        "description": "Function App managed identity principal ID - grant Sites.Selected to this"
+      }
+    },
+    "keyVaultName": {
+      "type": "string",
+      "value": "[variables('keyVaultName')]",
+      "metadata": {
+        "description": "Key Vault name"
+      }
+    },
+    "keyVaultUri": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2023-07-01').vaultUri]",
+      "metadata": {
+        "description": "Key Vault URI"
+      }
+    },
+    "storageAccountName": {
+      "type": "string",
+      "value": "[variables('storageAccountName')]",
+      "metadata": {
+        "description": "Storage account name"
+      }
+    },
+    "appInsightsName": {
+      "type": "string",
+      "value": "[variables('appInsightsName')]",
+      "metadata": {
+        "description": "Application Insights name"
+      }
+    }
+  }
+}
