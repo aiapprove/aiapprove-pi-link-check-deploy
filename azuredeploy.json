@@ -71,8 +71,8 @@
     },
     "uniqueSuffix": "[uniqueString(resourceGroup().id, parameters('baseName'))]",
     "functionAppName": "[format('{0}-func-{1}-{2}', parameters('baseName'), parameters('environment'), variables('uniqueSuffix'))]",
-    "storageAccountName": "[toLower(replace(format('{0}st{1}{2}', parameters('baseName'), parameters('environment'), take(variables('uniqueSuffix'), 8)), '-', ''))]",
-    "keyVaultName": "[format('{0}-kv-{1}-{2}', parameters('baseName'), parameters('environment'), take(variables('uniqueSuffix'), 8))]",
+    "storageAccountName": "[toLower(replace(format('{0}st{1}', take(parameters('baseName'), 10), take(variables('uniqueSuffix'), 10)), '-', ''))]",
+    "keyVaultName": "[format('{0}-kv-{1}', take(parameters('baseName'), 8), take(variables('uniqueSuffix'), 8))]",
     "appInsightsName": "[format('{0}-ai-{1}', parameters('baseName'), parameters('environment'))]",
     "logAnalyticsName": "[format('{0}-la-{1}', parameters('baseName'), parameters('environment'))]",
     "appServicePlanName": "[format('{0}-asp-{1}', parameters('baseName'), parameters('environment'))]"
