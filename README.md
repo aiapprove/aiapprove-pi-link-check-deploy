@@ -1,5 +1,7 @@
 # Deploy to Azure - In-Tenant Deployment
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Faiapprove%2Faiapprove-pi-link-check-deploy%2Fmain%2Fazuredeploy.json)
+
 This folder contains everything needed to deploy the PI Link Check Agent infrastructure to your own Azure subscription using the "Deploy to Azure" button.
 
 ---
@@ -32,7 +34,7 @@ Before deploying:
 
 ## One-Click Deploy
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Faiapprove%2Fpi-link-check-agent%2Fmain%2Fdeploy-to-azure%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Faiapprove%2Faiapprove-pi-link-check-deploy%2Fmain%2Fazuredeploy.json)
 
 **Click the button above** to open the Azure Portal deployment wizard.
 
